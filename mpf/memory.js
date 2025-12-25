@@ -48,7 +48,7 @@ async function loadHexRom(url, baseAddr = 0x6000) {
 }
 
 // Auto-load requested ROM file into 0x6000 on startup
-loadHexRom('/upf/js/archive/prt-ib.hex', 0x6000);
+loadHexRom('/archive/prt-ib.hex', 0x6000);
 
 // Convenience helpers for console interaction
 try { window.loadHexRom = loadHexRom; window.listRomRegions = () => romRegions; } catch (e) {}

@@ -19,7 +19,7 @@ function parseIntelHex(hexString, dataArrays) {
     return { address: address, length: length, data: dataArrays.slice(address, address + length) };
 }
 let fileContent;
-const fileUrl = '/upf/js/archive/monitor_and_tiny_basic.u6.hex';
+const fileUrl = '/archive/monitor_and_tiny_basic.u6.hex';
 
 logFileContent(fileUrl);
 
