@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="./resources/7seg.svg" sizes="any" type="image/svg+xml">
+  <title>mpf--1</title>
+  
+  <link rel="stylesheet" href="resources/style.css" /> 
+  <script src="mpf/logger.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/gh/DrGoldfire/Z80.js@master/Z80.js"></script>
+  <script src="/mpf/register.js"></script>
+  <script src="/mpf/memory.js"></script>
+  <script src="/IO/display.js"></script>
+  <script src="/IO/audio.js"></script>
+  <script src="/IO/keyboard.js"></script>
+  <script src="/IO/keyMap.js"></script>
+  <script src="/mpf/run.js"></script>
+  <script src="/mpf/Commands.js"></script>
+  <script src="/mpf/parseIntelHex.js"></script>
+  <script src="/mpf/automation.js"></script>
+</head>
+
+<body>
+  <div class="window" id="window">
+
+    <div class="led-group">
+      <div class="svg-7seg-container">
+        <object type="image/svg+xml" id="svg-object-add3" data="./resources/7seg.svg"></object>
+        <object type="image/svg+xml" id="svg-object-add2" data="./resources/7seg.svg"></object>
+        <object type="image/svg+xml" id="svg-object-add1" data="./resources/7seg.svg"></object>
+        <object type="image/svg+xml" id="svg-object-add0" data="./resources/7seg.svg"></object>
+        <object type="image/svg+xml" id="svg-object-data1" data="./resources/7seg.svg"></object>
+        <object type="image/svg+xml" id="svg-object-data0" data="./resources/7seg.svg"></object>
+      </div>
+
+      <div class="led-stack">
+        <div class="led led-green" id="led-green"></div>
+        <div class="led led-red" id="led-red"></div>
+      </div>
+    </div>
+
+    <div class="control-panel-right">
+
+      <div class="button-grid" id="control-buttons">
+        <!-- Button A: Audio In (col 1, row 1) -->
+        <div class="button-svg-container btn-A" onclick="handleAudioIn()" title="Audio In File&#10;Hex or WAV">
+          <svg class="button-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" fill="#bbb" stroke="#888" stroke-width="2" id="power-button-circle"/>
+            <text x="12" y="16" font-size="12" text-anchor="middle" fill="#333">A</text>
+          </svg>
+        </div>
+
+        <!-- Button B: Audio Record (col 2, row 1) -->
+        <div class="button-svg-container btn-B" onclick="handleAudioRecord()" title="Audio Record&#10;Start/Stop">
+          <svg class="button-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" fill="#bbb" stroke="#888" stroke-width="2" />
+            <text x="12" y="16" font-size="12" text-anchor="middle" fill="#333">B</text>
+          </svg>
+        </div>
+
+        <!-- Button C: Toggle Keyboard (col 3, row 1) -->
+        <div class="button-svg-container btn-C" onclick="toggleKeyboard()" title="Toggle Keyboard&#10;Switch keyboard image">
+          <svg class="button-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" fill="#bbb" stroke="#888" stroke-width="2" />
+            <text x="12" y="16" font-size="12" text-anchor="middle" fill="#333">C</text>
+          </svg>
+        </div>
+
+        <!-- Button D: Power (col 3, row 2) -->
+        <div class="button-svg-container btn-D" onclick="handlePower()" title="Power Off/ON&#10;System Control">
+          <svg class="button-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" fill="#bbb" stroke="#888" stroke-width="2" />
+            <text x="12" y="16" font-size="12" text-anchor="middle" fill="#333">D</text>
+          </svg>
+        </div>
+      </div>
+
+      <div id="future-text-area">
+        </div>
+    </div>
+  </div>
+
+  <div class="image-container">
+    <img src="https://www.robkalmeijer.nl/techniek/computer/mpf1/mpf-1b_keyboard.jpg" id="keyboard-image" />
+    <div class="circle" id="circle"></div>
+  </div>
+
+  <script type="module" src="mpf/script.js"></script>
+
+</body>
+
+</html>
