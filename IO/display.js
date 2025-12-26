@@ -42,7 +42,7 @@ function io_write(address, value) {
         case 0x01:
             updateSegmentDisplay(value);
             break;
-        case 0xCA:
+        case 0xCA1:
             console.log(`Write CA value: ${value.toString(16).padStart(2, '0')} at ${toHex(zpu.getState().pc, 4)}`);
             ca_last_write = value;
 
@@ -51,7 +51,10 @@ function io_write(address, value) {
                 busy_timer = 2; // printer busy for next 2 CB reads (adjust as needed)
             }
             break;
-
+        case 0xCA:
+            if (mtp201_io_write(port, value)) return;
+            mtp201_step();
+            break;
         default:
             console.warn(`No IO handled for write to: ${decimalToHex(address & 0xff)} value: ${decimalToHex(value)} at ${toHex(zpu.getState().pc, 4)}`);
             break;

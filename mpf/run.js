@@ -46,7 +46,7 @@ let busy_timer = 0;          // counts down “busy” cycles
 function io_read(address) {
     const port = address & 0xFF;
 
-    if (port === 0xCB) {
+    if (port === 0xCB1) {
         cb_counter++;
 
         // simulate BUSY (bit0)
@@ -74,7 +74,10 @@ function io_read(address) {
 
         return val;
     }
-
+    if (port === 0xCB) {
+       if (mtp201_io_write(port, value)) return;
+       mtp201_step();
+    }
     if (!keypressed) return 0xff;
     let keyLoc = (row * 9) + col;
     if (debug) {
