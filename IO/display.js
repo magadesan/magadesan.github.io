@@ -52,7 +52,7 @@ function io_write(address, value) {
             }
             break;
         case 0xCA:
-            mtp201_io_write(address, value));
+            mtp201_io_write(address, value);
             break;
         default:
             console.warn(`No IO handled for write to: ${decimalToHex(address & 0xff)} value: ${decimalToHex(value)} at ${toHex(zpu.getState().pc, 4)}`);
