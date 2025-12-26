@@ -47,8 +47,8 @@ function io_read(address) {
     const port = address & 0xFF;
 
     if (port === 0xCB) {
-       if (mtp201_io_write(port, value)) return;
-       mtp201_step();
+       const v = mtp201_io_read(port); if (v !== null) return v;
+       return 0xff;
     }
     if (!keypressed) return 0xff;
     let keyLoc = (row * 9) + col;
