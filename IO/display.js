@@ -52,7 +52,7 @@ function io_write(address, value) {
             }
             break;
         case 0xCA:
-            if (mtp201_io_write(port, value)) return;
+            if (mtp201_io_write(address, value)) return;
             mtp201_step();
             break;
         default:
