@@ -1,7 +1,6 @@
 /* =========================================================
-   Dynamic MTP201 I/O emulation
-   - Fully driven by ROM writes to CAh
-   - TG and HOME on CBh emulate printer
+   MTP201 Printer Emulation (ROM-compatible)
+   DEBUG BUILD – NO LOGIC CHANGES
    ========================================================= */
 
 let motorOn = false;
@@ -11,25 +10,34 @@ let tg      = 0;
 // Internal state
 let phase      = "IDLE";   // IDLE, RIGHT, RETURN
 let tgCounter  = 0;
-let lineQueue  = 0;        // lines to print based on motor pulses
+let lineQueue  = 0;
 let lastMotor  = false;
 
+// Debug helpers
+let stepCount = 0;
+let lastTG    = 0;
+
 // Constants
-const TG_BIT    = 0x01;
-const HOME_BIT  = 0x02;
-const MOTOR_BIT = 0x01;
-const TG_PER_LINE = 120;   // dots per line, adjust to mechanism
+const MOTOR_BIT    = 0x01;
+const TG_BIT       = 0x01;
+const HOME_BIT     = 0x02;
+const TG_PER_LINE  = 120;
 
 // =========================================================
 // IO READ
 // =========================================================
 function mtp201_io_read(port) {
     if (port !== 0xCB) return null;
+
     let v = 0;
-    if (tg) v |= TG_BIT;
+    if (tg)   v |= TG_BIT;
     if (home) v |= HOME_BIT;
 
-    console.log(`[MTP201] IO READ from port 0x${port.toString(16)} -> 0x${v.toString(16)} | tg=${tg} home=${home}`);
+    console.log(
+        `[MTP201][READ] CBh → ${v.toString(2).padStart(8, "0")} ` +
+        `TG=${tg} HOME=${home} PHASE=${phase} LQ=${lineQueue}`
+    );
+
     return v;
 }
 
@@ -39,70 +47,111 @@ function mtp201_io_read(port) {
 function mtp201_io_write(port, value) {
     if (port !== 0xCA) return false;
 
-    const motor = (value & MOTOR_BIT) !== 0;
+    const motor   = (value & MOTOR_BIT) !== 0;
     const thermal = value & 0xFE;
 
-    console.log(`[MTP201] IO WRITE to port 0x${port.toString(16)} -> 0x${value.toString(16)} | motor=${motor} thermal=0x${thermal.toString(16)}`);
+    console.log(
+        `[MTP201][WRITE] CAh ← 0x${value.toString(16).padStart(2, "0")} ` +
+        `motor=${motor} thermal=${thermal !== 0}`
+    );
 
-    // Detect rising edge of motor → enqueue a line if thermal bits were set
+    // Detect rising edge of motor
+    if (motor && !lastMotor) {
+        console.log(`[MTP201] Motor rising edge`);
+    }
+
+    // Rising edge + thermal data queues a line
     if (motor && !lastMotor && thermal !== 0) {
-        lineQueue++;          // one line to print per motor+thermal write
+        lineQueue++;
         phase = "RIGHT";
         tgCounter = 0;
         home = true;
-        console.log(`[MTP201] Motor rising edge detected -> lineQueue=${lineQueue}, phase=${phase}`);
+
+        console.log(
+            `[MTP201] LINE QUEUED → lineQueue=${lineQueue}, phase=RIGHT`
+        );
     }
 
     lastMotor = motor;
-    motorOn = motor;
+    motorOn   = motor;
 
     return true;
 }
 
 // =========================================================
-// DEVICE STEP (call each tick)
+// DEVICE STEP
 // =========================================================
 function mtp201_step() {
-    if (!motorOn || lineQueue <= 0) return;
+    stepCount++;
+
+    if (!motorOn || lineQueue <= 0) {
+        if (phase !== "IDLE") {
+            console.log(
+                `[MTP201][STEP ${stepCount}] Motor stopped → IDLE`
+            );
+        }
+        phase = "IDLE";
+        tg = 0;
+        return;
+    }
 
     switch (phase) {
+
+        // ---------------------------------------------
         case "RIGHT":
             home = false;
 
-            // simulate TG pulses while moving right
             tg ^= 1;
-            if (tg) tgCounter++;
+            if (tg && !lastTG) {
+                tgCounter++;
+                console.log(
+                    `[MTP201][TG ↑] pulse=${tgCounter}/${TG_PER_LINE}`
+                );
+            }
 
-            console.log(`[MTP201] STEP RIGHT | tg=${tg} tgCounter=${tgCounter} lineQueue=${lineQueue}`);
+            console.log(
+                `[MTP201][STEP ${stepCount}] RIGHT ` +
+                `TG=${tg} tgCounter=${tgCounter}`
+            );
 
             if (tgCounter >= TG_PER_LINE) {
                 phase = "RETURN";
                 tgCounter = 0;
                 tg = 0;
-                console.log(`[MTP201] RIGHT complete -> phase=${phase}`);
+
+                console.log(
+                    `[MTP201] END OF LINE → RETURN`
+                );
             }
             break;
 
+        // ---------------------------------------------
         case "RETURN":
             home = true;
 
-            // line printed + paper feed
             lineQueue--;
-            console.log(`[MTP201] STEP RETURN | line printed, lineQueue=${lineQueue}`);
+
+            console.log(
+                `[MTP201][STEP ${stepCount}] RETURN ` +
+                `line complete → remaining=${lineQueue}`
+            );
 
             if (lineQueue > 0) {
                 phase = "RIGHT";
-                console.log(`[MTP201] More lines to print -> phase=${phase}`);
+                console.log(`[MTP201] NEXT LINE → RIGHT`);
             } else {
                 phase = "IDLE";
                 motorOn = false;
-                console.log(`[MTP201] All lines printed -> phase=${phase}, motorOn=${motorOn}`);
+                console.log(`[MTP201] PRINT DONE → IDLE`);
             }
             break;
 
+        // ---------------------------------------------
         case "IDLE":
         default:
             tg = 0;
             break;
     }
+
+    lastTG = tg;
 }
