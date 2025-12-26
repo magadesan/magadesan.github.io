@@ -28,6 +28,8 @@ function mtp201_io_read(port) {
     let v = 0;
     if (tg) v |= TG_BIT;
     if (home) v |= HOME_BIT;
+
+    console.log(`[MTP201] IO READ from port 0x${port.toString(16)} -> 0x${v.toString(16)} | tg=${tg} home=${home}`);
     return v;
 }
 
@@ -40,12 +42,15 @@ function mtp201_io_write(port, value) {
     const motor = (value & MOTOR_BIT) !== 0;
     const thermal = value & 0xFE;
 
+    console.log(`[MTP201] IO WRITE to port 0x${port.toString(16)} -> 0x${value.toString(16)} | motor=${motor} thermal=0x${thermal.toString(16)}`);
+
     // Detect rising edge of motor → enqueue a line if thermal bits were set
     if (motor && !lastMotor && thermal !== 0) {
         lineQueue++;          // one line to print per motor+thermal write
         phase = "RIGHT";
         tgCounter = 0;
         home = true;
+        console.log(`[MTP201] Motor rising edge detected -> lineQueue=${lineQueue}, phase=${phase}`);
     }
 
     lastMotor = motor;
@@ -68,10 +73,13 @@ function mtp201_step() {
             tg ^= 1;
             if (tg) tgCounter++;
 
+            console.log(`[MTP201] STEP RIGHT | tg=${tg} tgCounter=${tgCounter} lineQueue=${lineQueue}`);
+
             if (tgCounter >= TG_PER_LINE) {
                 phase = "RETURN";
                 tgCounter = 0;
                 tg = 0;
+                console.log(`[MTP201] RIGHT complete -> phase=${phase}`);
             }
             break;
 
@@ -80,12 +88,15 @@ function mtp201_step() {
 
             // line printed + paper feed
             lineQueue--;
+            console.log(`[MTP201] STEP RETURN | line printed, lineQueue=${lineQueue}`);
 
             if (lineQueue > 0) {
                 phase = "RIGHT";
+                console.log(`[MTP201] More lines to print -> phase=${phase}`);
             } else {
                 phase = "IDLE";
                 motorOn = false;
+                console.log(`[MTP201] All lines printed -> phase=${phase}, motorOn=${motorOn}`);
             }
             break;
 
