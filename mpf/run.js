@@ -46,34 +46,6 @@ let busy_timer = 0;          // counts down “busy” cycles
 function io_read(address) {
     const port = address & 0xFF;
 
-    if (port === 0xCB1) {
-        cb_counter++;
-
-        // simulate BUSY (bit0)
-        let busy = 0x01; // ready by default
-        if (busy_timer > 0) {
-            busy = 0x00; // busy
-            busy_timer--;
-        }
-
-        // simulate TACHO (bit1)
-        let tacho = (cb_counter % 4 === 0) ? 0x02 : 0x00; // pulse every 4 reads
-
-        // paper end and error (static for now)
-        const paper_end = 0x00;
-        const error = 0x00;
-
-        const val = busy | tacho | paper_end | error;
-
-        // log only when value changes
-        if (typeof io_read._last_cb_val === 'undefined') io_read._last_cb_val = null;
-        if (val !== io_read._last_cb_val) {
-            console.warn(`Read CB -> ${val.toString(16).padStart(2,'0')} at PC=${toHex(zpu.getState().pc,4)}`);
-            io_read._last_cb_val = val;
-        }
-
-        return val;
-    }
     if (port === 0xCB) {
        if (mtp201_io_write(port, value)) return;
        mtp201_step();
