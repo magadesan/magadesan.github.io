@@ -1,127 +1,143 @@
 /* =========================================================
-   MTP201 I/O DEVICE EMULATION — ROM-DRIVEN
+   MTP201 dynamic I/O emulation (ROM-faithful)
    ---------------------------------------------------------
-   Observed ROM behavior:
-     OUT (CAh),00h  → Drive thermal head shift right
-
-   Ports:
-     READ  CBh:
-       bit 0 = TG
-       bit 1 = HOME
-
-     WRITE CAh:
-       any value = mechanical command / thermal data
-
-   Model:
-     - CA write while IDLE starts one shift-right cycle
-     - TG pulses generated during right movement
-     - Return stroke asserts HOME + feeds paper
+   Port CA : output (motor / control)
+   Port CB : input  (status)
+     bit 0 = TG
+     bit 1 = HOME
    ========================================================= */
 
-// ------------------ constants ------------------
-const TG_BIT   = 0x01;
-const HOME_BIT = 0x02;
+const mtp201 = {
+  active: true,
 
-const TG_PER_LINE = 120;   // tune to match ROM timing
+  // status bits
+  TG_BIT:   0x01,
+  HOME_BIT: 0x02,
 
-// ------------------ internal state ------------------
-let phase     = "IDLE";    // IDLE → RIGHT → RETURN
-let tg        = 0;
-let home      = true;
+  // mechanical state
+  motorOn: false,
+  busyPolls: 0,      // counts down on IN CB
+  lastCB: null,      // last CB value to reduce log spam
+  tgPulsePending: false, // TG pulse triggered by CA write
 
-let tgCounter = 0;
-let lineQueue = 0;
+  // thermal head state
+  headBits: 7         // number of pins on thermal head
+};
 
-// ------------------ debug ------------------
-const DEBUG = true;
-function log(...a) { if (DEBUG) console.log("[MTP201]", ...a); }
+// --- tuning ---
+const MTP201_BUSY_POLLS = 64;
 
-// ==================================================
-// IO READ (CBh)
-// ==================================================
+// --- helpers ---
+function dbg(msg) {
+  console.debug(msg);
+}
+
+function toHex(v, len=2) {
+  return v.toString(16).padStart(len, '0').toUpperCase();
+}
+
+// =========================================================
+// Render thermal column as console bitmap
+// =========================================================
+function renderThermalBitmap(bits) {
+  let row = '';
+  for (let i = 0; i < mtp201.headBits; i++) {
+    row += (bits & (1 << i)) ? '█' : '.';
+  }
+  return row.split('').reverse().join(''); // pin 0 left
+}
+
+// =========================================================
+// OUT (CA) handler
+// =========================================================
+function io_write_ca(value) {
+  if (!mtp201.active) return false;
+
+  const pc = toHex(zpu.getState().pc, 4);
+
+  // bit 7 controls motor
+  const motor = (value & 0x80) !== 0;
+
+  if (motor && !mtp201.motorOn) {
+    mtp201.motorOn   = true;
+    mtp201.busyPolls = MTP201_BUSY_POLLS;
+    dbg(`[MTP201][PC=${pc}] CA[7] → MOTOR ON`);
+  }
+  else if (!motor && mtp201.motorOn) {
+    mtp201.motorOn   = false;
+    mtp201.busyPolls = 0;
+    dbg(`[MTP201][PC=${pc}] CA[7] → MOTOR OFF`);
+  }
+
+  // Determine which pins fired (thermal head bits)
+  const firedPins = [];
+  for (let i = 0; i < mtp201.headBits; i++) {
+    if (value & (1 << i)) firedPins.push(i);
+  }
+
+  if (firedPins.length > 0) {
+    dbg(`[MTP201] CA pins fired → bits {${firedPins.join(',')}}`);
+    dbg(`[MTP201] Thermal bitmap → ${renderThermalBitmap(value)}`);
+  }
+
+  // Generate a TG pulse for each CA write if motor+thermal
+  if ((value & 0x7F) !== 0) { // any thermal bit set
+    mtp201.tgPulsePending = true;
+    mtp201.tgPulseWidth   = 2; // pulse lasts 2 reads
+    dbg(`[MTP201][PC=${pc}] TG pulse armed (width=2)`);
+  }
+
+  return true; // port handled
+}
+
+// =========================================================
+// IN (CB) handler
+// =========================================================
+function io_read_cb() {
+  if (!mtp201.active) return null;
+
+  let status = 0x00;
+
+  // TG pulse from CA write
+  if (mtp201.tgPulsePending) {
+    status |= mtp201.TG_BIT;
+    mtp201.tgPulseWidth--;
+    if (mtp201.tgPulseWidth <= 0) mtp201.tgPulsePending = false;
+  }
+
+  // HOME bit reflects motor idle
+  if (!mtp201.motorOn) {
+    status |= mtp201.HOME_BIT;
+  } else {
+    // decrement busyPolls to auto-stop motor
+    if (mtp201.busyPolls > 0) {
+      mtp201.busyPolls--;
+      if (mtp201.busyPolls === 0) {
+        mtp201.motorOn = false;
+        mtp201.lastCB = null; // force log on next read
+        dbg(`[MTP201] Motor motion complete → HOME`);
+      }
+    }
+  }
+
+  // Only log if CB value changed
+  if (status !== mtp201.lastCB) {
+    mtp201.lastCB = status;
+    dbg(`[MTP201][PC=${toHex(zpu.getState().pc,4)}] IN  CB → ${toHex(status,2)}`);
+  }
+
+  return status;
+}
+
+// =========================================================
+// Glue helpers for global I/O dispatcher
+// =========================================================
 function mtp201_io_read(port) {
-    if (port !== 0xCB) return null;
-
-    let v = 0;
-    if (tg)   v |= TG_BIT;
-    if (home) v |= HOME_BIT;
-
-    log("[READ] CBh →",
-        v.toString(2).padStart(8, "0"),
-        `TG=${tg}`,
-        `HOME=${home}`,
-        `PHASE=${phase}`,
-        `LQ=${lineQueue}`);
-
-    return v;
+  if (port === 0xCB) return io_read_cb();
+  return null;
 }
 
-// ==================================================
-// IO WRITE (CAh)
-// ==================================================
 function mtp201_io_write(port, value) {
-    if (port !== 0xCA) return false;
-
-    log("[WRITE] CAh ←",
-        "0x" + value.toString(16).padStart(2, "0"),
-        "PHASE=" + phase);
-
-    // ROM uses CAh writes to drive motion
-    if (phase === "IDLE") {
-        lineQueue++;
-        phase = "RIGHT";
-        tgCounter = 0;
-        tg = 0;
-        home = true;
-
-        log("CA write → shift right, enqueue line =", lineQueue);
-    }
-
-    // Thermal bits intentionally ignored here
-    return true;
-}
-
-// ==================================================
-// DEVICE STEP (call every emulator tick)
-// ==================================================
-function mtp201_step() {
-    if (lineQueue <= 0) return;
-
-    switch (phase) {
-
-        case "RIGHT":
-            home = false;
-
-            // generate TG pulses
-            tg ^= 1;
-            if (tg) tgCounter++;
-
-            if (tgCounter >= TG_PER_LINE) {
-                phase = "RETURN";
-                tgCounter = 0;
-                tg = 0;
-                log("right edge reached → RETURN");
-            }
-            break;
-
-        case "RETURN":
-            home = true;
-
-            // paper feed happens here
-            lineQueue--;
-            log("line done → paper feed, remaining =", lineQueue);
-
-            if (lineQueue > 0) {
-                phase = "RIGHT";
-            } else {
-                phase = "IDLE";
-                log("printer idle");
-            }
-            break;
-
-        case "IDLE":
-        default:
-            tg = 0;
-            break;
-    }
+  if (port === 0xCA) return io_write_ca(value);
+  return false;
 }
