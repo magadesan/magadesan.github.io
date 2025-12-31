@@ -29,13 +29,9 @@ function pressKey(key) {
 async function moveCircle(x, y, z) {
   if (z == 0) await new Promise(r => setTimeout(r, 100));
   const circle = document.getElementById('circle');
-  const image = document.getElementById('keyboard-image');
-  const container = image.closest('.image-container') || image.parentElement;
-  const containerRect = container.getBoundingClientRect();
-  const relX = x - containerRect.left;
-  const relY = y - containerRect.top;
-  circle.style.left = `${relX - circle.offsetWidth / 2}px`;
-  circle.style.top = `${relY - circle.offsetHeight / 2}px`;
+  // x and y are now expected to be mouse coordinates (clientX, clientY)
+  circle.style.left = `${x - circle.offsetWidth / 2}px`;
+  circle.style.top = `${y - circle.offsetHeight / 2}px`;
   circle.style.display = 'block';
   circle.style.opacity = z;
 }

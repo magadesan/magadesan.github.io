@@ -2,6 +2,7 @@
   width: 574px;
   height: 262px;
   display: flex;
+  position: relative;
 }
 
 body {

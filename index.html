@@ -108,6 +108,20 @@
     <img src="https://www.robkalmeijer.nl/techniek/computer/mpf1/mpf-1b_keyboard.jpg" id="keyboard-image" />
     <div class="circle" id="circle"></div>
   </div>
+  <script>
+    const keyboardImage = document.getElementById('keyboard-image');
+    const circle = document.getElementById('circle');
+    keyboardImage.addEventListener('mousemove', (e) => {
+      const rect = keyboardImage.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      // Position relative to image container
+      moveCircle(rect.left + x, rect.top + y, 1);
+    });
+    keyboardImage.addEventListener('mouseleave', () => {
+      circle.style.display = 'none';
+    });
+  </script>
 
   <script type="module" src="mpf/script.js"></script>
 
