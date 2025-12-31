@@ -144,3 +144,10 @@ body {
 #future-text-area {
   min-width: 5px;
 }
+
+#mtpScreen {
+    /* This makes the white background of the canvas transparent */
+    background-color: transparent; 
+    /* Softens the dots slightly so they aren't 'too' digital */
+    filter: contrast(120%) brightness(80%);
+}

@@ -30,25 +30,47 @@ function getPC() {
 // =========================================================
 // Flush Printer Buffer (Fixed for correct vertical order)
 // =========================================================
+// Add these to the top of mtp201_io_dynamic.js or inside window.mtp201
+let currentY = 0;
+
 function flushPrinterBuffer() {
   const m = window.mtp201;
-  if (m.columnBuffer.length === 0) return;
+  const canvas = document.getElementById('mtpScreen');
+  if (!canvas || m.columnBuffer.length === 0) return;
+  
+  const ctx = canvas.getContext('2d');
+  
+  // Set the "ink" color - slightly grey-black for a thermal look
+  ctx.fillStyle = "rgba(0, 0, 0, 0.8)"; 
 
-  console.log(`%c [MTP201 PRINTER OUTPUT] `, 'background: .; color: #bada55');
+  // console.log for debugging
+  console.log(`%c [MTP201 PRINT] `, 'background: #222; color: #bada55');
 
-  /** * FIXED: Iterating from pin 6 down to 0 
-   * This flips the bit-to-row mapping.
-   */
-  for (let row = m.headBits - 1; row >= 0; row--) {
-    let lineString = "";
-    for (let col = 0; col < m.columnBuffer.length; col++) {
-      lineString += (m.columnBuffer[col] & (1 << row)) ? "█" : " ";
+  for (let col = 0; col < m.columnBuffer.length; col++) {
+    let columnData = m.columnBuffer[col];
+    
+    // Process the 7 bits (rows)
+    for (let bit = 0; bit < m.headBits; bit++) {
+      // Check if the specific bit is active
+      if (columnData & (1 << bit)) {
+        // Draw the dot at (x, y)
+        // x = column index
+        // y = current vertical position + (inverted bit for correct orientation)
+        ctx.fillRect(col, currentY + (m.headBits - 1 - bit), 1, 1);
+      }
     }
-    console.log(lineString);
+  }
+
+  // Advance the "paper" by the height of the print head
+  currentY += m.headBits;
+
+  // If we run off the bottom, clear and restart at the top
+  if (currentY > canvas.height) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    currentY = 0;
   }
 
   m.columnBuffer = [];
-  console.log("-".repeat(30));
 }
 
 window.io_write_ca = function (port, value) {
