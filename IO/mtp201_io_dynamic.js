@@ -66,10 +66,8 @@ window.io_write_ca = function (port, value) {
   }
 
   const thermalData = value & 0x7F;
-  if (thermalData !== 0) {
-    m.columnBuffer.push(thermalData);
-    m.busyPolls = MTP201_MAX_LINE_POLLS;
-  }
+  m.columnBuffer.push(thermalData);
+  m.busyPolls = MTP201_MAX_LINE_POLLS;
 };
 
 window.io_read_cb = function (port) {
