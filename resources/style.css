@@ -146,8 +146,16 @@ body {
 }
 
 #mtpScreen {
-    /* This makes the white background of the canvas transparent */
-    background-color: transparent; 
-    /* Softens the dots slightly so they aren't 'too' digital */
-    filter: contrast(120%) brightness(80%);
+    /* Pure white background for max contrast */
+    background-color: #ffffff; 
+    
+    /* Adds a subtle shadow to make the 'paper' stand out from the UI */
+    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    
+    /* Sharpen the dots and boost the black levels */
+    filter: contrast(150%) brightness(100%);
+    
+    /* Ensure the browser doesn't blur the pixels */
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
 }

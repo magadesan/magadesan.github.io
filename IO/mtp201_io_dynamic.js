@@ -1,120 +1,112 @@
 /* =========================================================
-   MTP201 dynamic I/O emulation - Version 1.0
+   MTP201 dynamic I/O emulation - Version 2.1
+   80px Viewport + 1000 Line Scrollable Buffer
    ========================================================= */
 
 window.mtp201 = {
-  active: true,
-  TG_BIT: 0x01,
-  HOME_BIT: 0x02,
-
-  motorOn: false,
-  busyPolls: 0,
-  lastCB: null,
-
-  tgCounter: 0,
-  TG_PHASE_WIDTH: 25,
-  headBits: 7,
-
-  columnBuffer: []
+    active: true,
+    TG_BIT: 0x01,
+    HOME_BIT: 0x02,
+    motorOn: false,
+    busyPolls: 0,
+    tgCounter: 0,
+    TG_PHASE_WIDTH: 25,
+    headBits: 7,
+    columnBuffer: [],
+    currentX: 0, 
+    currentY: 10, 
+    LINE_SPACING: 2,
+    isHome: true,
+    lineHasData: false,
+    skipFirst: false
 };
 
-const MTP201_MAX_LINE_POLLS = 3000;
-
-function getPC() {
-  try {
-    if (typeof zpu !== 'undefined') return zpu.getState().pc.toString(16).toUpperCase();
-  } catch (e) { }
-  return "????";
-}
-
-// =========================================================
-// Flush Printer Buffer (Fixed for correct vertical order)
-// =========================================================
-// Add these to the top of mtp201_io_dynamic.js or inside window.mtp201
-let currentY = 0;
+const MTP201_WATCHDOG = 20000; 
+const MAX_PAPER_HEIGHT = 9000; // Approx 1000 lines
 
 function flushPrinterBuffer() {
-  const m = window.mtp201;
-  const canvas = document.getElementById('mtpScreen');
-  if (!canvas || m.columnBuffer.length === 0) return;
-  
-  const ctx = canvas.getContext('2d');
-  
-  // Set the "ink" color - slightly grey-black for a thermal look
-  ctx.fillStyle = "rgba(0, 0, 0, 0.8)"; 
-
-  // console.log for debugging
-  console.log(`%c [MTP201 PRINT] `, 'background: #222; color: #bada55');
-
-  for (let col = 0; col < m.columnBuffer.length; col++) {
-    let columnData = m.columnBuffer[col];
+    const m = window.mtp201;
+    const canvas = document.getElementById('mtpScreen');
+    const container = document.getElementById('printer-scroll-box');
     
-    // Process the 7 bits (rows)
-    for (let bit = 0; bit < m.headBits; bit++) {
-      // Check if the specific bit is active
-      if (columnData & (1 << bit)) {
-        // Draw the dot at (x, y)
-        // x = column index
-        // y = current vertical position + (inverted bit for correct orientation)
-        ctx.fillRect(col, currentY + (m.headBits - 1 - bit), 1, 1);
-      }
+    if (!m.columnBuffer || m.columnBuffer.length === 0) return;
+
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = "#000000"; 
+
+        for (let col = 0; col < m.columnBuffer.length; col++) {
+            let data = m.columnBuffer[col];
+            if (data > 0) {
+                m.lineHasData = true; 
+                for (let bit = 0; bit < m.headBits; bit++) {
+                    if (data & (1 << bit)) {
+                        ctx.fillRect(m.currentX + col, m.currentY + (m.headBits - 1 - bit), 1.1, 1.1);
+                    }
+                }
+            }
+        }
+        m.currentX += m.columnBuffer.length;
+
+        // AUTO-SCROLL: Center the current printing line in the 80px window
+        if (container) {
+            // Subtract 40 (half of window height) to keep 'ink' in the middle
+            container.scrollTop = m.currentY - 40; 
+        }
     }
-  }
-
-  // Advance the "paper" by the height of the print head
-  currentY += m.headBits;
-
-  // If we run off the bottom, clear and restart at the top
-  if (currentY > canvas.height) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    currentY = 0;
-  }
-
-  m.columnBuffer = [];
+    m.columnBuffer = [];
 }
 
 window.io_write_ca = function (port, value) {
-  const m = window.mtp201;
-  const motor = (value & 0x80) !== 0;
+    const m = window.mtp201;
+    const thermalData = value & 0x7F;
+    const motorBit = (value & 0x80) !== 0;
 
-  if (motor && !m.motorOn) {
-    m.motorOn = true;
-    m.busyPolls = MTP201_MAX_LINE_POLLS;
-    m.tgCounter = 0;
-    console.debug(`[MTP201] MOTOR START`);
-  } else if (!motor && m.motorOn) {
-    m.motorOn = false;
-    flushPrinterBuffer();
-  }
+    if (motorBit && !m.motorOn && m.isHome) {
+        if (m.lineHasData) {
+            m.currentY += (m.headBits + m.LINE_SPACING);
+            m.currentX = 0; 
+            m.lineHasData = false;
 
-  const thermalData = value & 0x7F;
-  m.columnBuffer.push(thermalData);
-  m.busyPolls = MTP201_MAX_LINE_POLLS;
+            if (m.currentY > MAX_PAPER_HEIGHT - 50) {
+                const canvas = document.getElementById('mtpScreen');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                m.currentY = 10;
+            }
+        }
+        m.isHome = false; 
+        m.skipFirst = true;
+    }
+
+    if (motorBit || m.motorOn) {
+        if (m.skipFirst) m.skipFirst = false;
+        else m.columnBuffer.push(thermalData);
+        m.busyPolls = MTP201_WATCHDOG;
+    }
+
+    if (motorBit && !m.motorOn) {
+        m.motorOn = true;
+    } else if (!motorBit && m.motorOn) {
+        m.motorOn = false;
+        flushPrinterBuffer();
+        m.isHome = true; 
+    }
 };
 
 window.io_read_cb = function (port) {
-  const m = window.mtp201;
-  let status = 0x00;
-
-  if (!m.motorOn) {
-    status |= m.HOME_BIT;
-  } else {
-    m.tgCounter++;
-    if (Math.floor(m.tgCounter / m.TG_PHASE_WIDTH) % 2 === 0) {
-      status |= m.TG_BIT;
+    const m = window.mtp201;
+    let status = 0x00;
+    if (m.isHome) status |= m.HOME_BIT;
+    if (m.motorOn) {
+        m.tgCounter++;
+        if (Math.floor(m.tgCounter / m.TG_PHASE_WIDTH) % 2 === 0) status |= m.TG_BIT;
+        if (m.busyPolls > 0) m.busyPolls--;
+        else {
+            m.motorOn = false;
+            m.isHome = true;
+            flushPrinterBuffer();
+        }
     }
-
-    if (m.busyPolls > 0) {
-      m.busyPolls--;
-    } else {
-      m.motorOn = false;
-      flushPrinterBuffer();
-    }
-  }
-
-  if (status !== m.lastCB) {
-    m.lastCB = status;
-  }
-
-  return status;
+    return status;
 };

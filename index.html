@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="./resources/7seg.svg" sizes="any" type="image/svg+xml">
   <title>mpf--1</title>
-  
-  <link rel="stylesheet" href="resources/style.css" /> 
+
+  <link rel="stylesheet" href="resources/style.css" />
   <script src="mpf/logger.js"></script>
 
   <script src="https://cdn.jsdelivr.net/gh/DrGoldfire/Z80.js@master/Z80.js"></script>
@@ -41,8 +41,24 @@
         <div class="led led-green" id="led-green"></div>
         <div class="led led-red" id="led-red"></div>
       </div>
-      <canvas id="mtpScreen" width="138" height="100"
-        style="position: absolute; left: 300px; top: 2px; z-index: 10; pointer-events: none; image-rendering: pixelated;">
+    </div>
+    <div id="printer-scroll-box" style="
+    width: 170px; 
+    height: 80px; 
+    overflow-y: auto; 
+    background: #ffffff; 
+    border: 3px solid #222; 
+    position: absolute; 
+    left: 320px; 
+    top: 5px; 
+    z-index: 100;
+    box-shadow: inset 0 0 5px #999;">
+
+      <canvas id="mtpScreen" width="160" height="9000" style="
+      background: #fff; 
+      image-rendering: pixelated; 
+      display: block; 
+      filter: contrast(150%);">
       </canvas>
     </div>
 
@@ -52,7 +68,7 @@
         <!-- Button A: Audio In (col 1, row 1) -->
         <div class="button-svg-container btn-A" onclick="handleAudioIn()" title="Audio In File&#10;Hex or WAV">
           <svg class="button-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10" fill="#bbb" stroke="#888" stroke-width="2" id="power-button-circle"/>
+            <circle cx="12" cy="12" r="10" fill="#bbb" stroke="#888" stroke-width="2" id="power-button-circle" />
             <text x="12" y="16" font-size="12" text-anchor="middle" fill="#333">A</text>
           </svg>
         </div>
@@ -66,7 +82,8 @@
         </div>
 
         <!-- Button C: Toggle Keyboard (col 3, row 1) -->
-        <div class="button-svg-container btn-C" onclick="toggleKeyboard()" title="Toggle Keyboard&#10;Switch keyboard image">
+        <div class="button-svg-container btn-C" onclick="toggleKeyboard()"
+          title="Toggle Keyboard&#10;Switch keyboard image">
           <svg class="button-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" fill="#bbb" stroke="#888" stroke-width="2" />
             <text x="12" y="16" font-size="12" text-anchor="middle" fill="#333">C</text>
@@ -83,7 +100,7 @@
       </div>
 
       <div id="future-text-area">
-        </div>
+      </div>
     </div>
   </div>
 
