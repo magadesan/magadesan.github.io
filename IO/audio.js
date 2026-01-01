@@ -1,197 +1,226 @@
-let globalAudioContext = null;
-let globalOscillator = null;
-let globalGainNode = null;
-let globalMediaRecorder = null; // Used for Audio-only recording (Button C)
-let globalAudioChunks = [];
-let globalIsBeeping = false;
-
-// Global variable for audio stream capture (used by Button D in script.js)
-let globalAudioDestination = null;
-
-// Exported function for dumping files
-window.triggerDownload = function(blob, filename) {
-    console.log(`[DL DEBUG] triggerDownload called for: ${filename}, Blob size: ${blob.size}`);
-    try {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        
-        // This is the critical click to initiate download
-        a.click();
-        
-        // Clean up
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        console.log(`[DL DEBUG] Successfully executed download steps for: ${filename}`);
-        return true; 
-    } catch (error) {
-        console.error("[DL DEBUG] Fatal Error in triggerDownload utility:", error);
-        return false; 
+class AudioManager {
+    constructor() {
+        this.audioContext = null;
+        this.oscillator = null;
+        this.gainNode = null;
+        this.mediaRecorder = null;
+        this.audioChunks = [];
+        this.isBeeping = false;
+        this.audioDestination = null;
     }
-};
 
-// Exported object for screen recording access
-window.getAudioDestination = function() {
-    return globalAudioDestination;
-};
+    /**
+     * Initializes the AudioContext and starts the oscillator permanently.
+     */
+    startSession(initialFreq = 100) {
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.oscillator = this.audioContext.createOscillator();
+            this.gainNode = this.audioContext.createGain();
+            this.audioDestination = this.audioContext.createMediaStreamDestination();
 
-// Exported global context for resume/checks
-window.globalAudioContext = globalAudioContext;
+            const safeInitialFreq = (typeof initialFreq === 'number' && isFinite(initialFreq)) ? initialFreq : 100;
 
-/**
- * Public function to forcefully resume the AudioContext on user interaction.
- */
-window.resumeAudioContext = function() {
-    if (globalAudioContext && globalAudioContext.state === 'suspended') {
-        globalAudioContext.resume().then(() => {
-            console.log('AudioContext resumed via user action.');
-        }).catch(e => {
-            console.error('Failed to resume AudioContext:', e);
-        });
+            this.oscillator.frequency.value = safeInitialFreq;
+            this.gainNode.gain.value = 0.05;
+            this.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+
+            this.oscillator.connect(this.gainNode);
+            this.gainNode.connect(this.audioDestination);
+            this.gainNode.connect(this.audioContext.destination);
+            this.oscillator.start(0);
+
+            console.log("Audio Context Initialized and Oscillator Running.");
+        }
+
+        if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume().then(() => {
+                console.log('AudioContext resumed successfully during initialization.');
+            }).catch(() => {
+                console.log('AudioContext remains suspended. A user gesture is required to resume.');
+            });
+        }
     }
-};
 
-
-/**
- * Initializes the global AudioContext and starts the oscillator permanently.
- */
-function startAudioSession(initialFreq = 100) {
-    if (!globalAudioContext) {
-        globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-        globalOscillator = globalAudioContext.createOscillator();
-        globalGainNode = globalAudioContext.createGain();
-        
-        globalAudioDestination = globalAudioContext.createMediaStreamDestination(); 
-        
-        window.globalAudioContext = globalAudioContext; 
-
-        const safeInitialFreq = (typeof initialFreq === 'number' && isFinite(initialFreq)) ? initialFreq : 100;
-
-        globalOscillator.frequency.value = safeInitialFreq;
-        globalGainNode.gain.value = 0.05;
-
-        globalGainNode.gain.setValueAtTime(0, globalAudioContext.currentTime);
-
-        globalOscillator.connect(globalGainNode);
-        
-        globalGainNode.connect(globalAudioDestination);
-        globalGainNode.connect(globalAudioContext.destination); 
-        
-        globalOscillator.start(0); 
-        
-        console.log("Audio Context Initialized and Oscillator Running.");
+    /**
+     * Resumes the AudioContext if suspended.
+     */
+    resumeContext() {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            this.audioContext.resume().then(() => {
+                console.log('AudioContext resumed via user action.');
+            }).catch(e => {
+                console.error('Failed to resume AudioContext:', e);
+            });
+        }
     }
-    
-    if (globalAudioContext.state === 'suspended') {
-        globalAudioContext.resume().then(() => {
-            console.log('AudioContext resumed successfully during initialization.');
-        }).catch(() => {
-            console.log('AudioContext remains suspended. A user gesture is required to resume.');
-        });
+
+    /**
+     * Get the audio destination for recording.
+     */
+    getDestination() {
+        return this.audioDestination;
+    }
+
+    /**
+     * Starts audio-only recording.
+     */
+    startRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            console.warn("Audio recording is already active.");
+            return;
+        }
+
+        if (!this.audioContext || this.audioContext.state !== 'running') {
+            console.error("Audio Context not running. Cannot start recording.");
+            this.resumeContext();
+            return;
+        }
+
+        const dest = this.audioContext.createMediaStreamDestination();
+        this.mediaRecorder = new MediaRecorder(dest.stream, { mimeType: 'audio/webm' });
+        this.audioChunks = [];
+
+        this.gainNode.connect(dest);
+
+        this.mediaRecorder.ondataavailable = (event) => {
+            this.audioChunks.push(event.data);
+        };
+
+        this.mediaRecorder.onstop = () => {
+            this.gainNode.disconnect(dest);
+
+            const recordedAudioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+            console.log(`[AUD DEBUG] Recording stopped. Chunks: ${this.audioChunks.length}, Blob size: ${recordedAudioBlob.size}`);
+
+            this.downloadBlob(recordedAudioBlob, 'recorded_session.webm');
+
+            this.mediaRecorder = null;
+            this.audioChunks = [];
+            document.getElementById("led-green")?.classList.remove("on");
+        };
+
+        this.mediaRecorder.start();
+    }
+
+    /**
+     * Stops the current recording session.
+     */
+    stopRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+            this.mediaRecorder.stop();
+        } else {
+            console.warn("No active recording session to stop.");
+        }
+    }
+
+    /**
+     * Plays a beep tone.
+     */
+    beep(freq = 440, durationMs = 100, volume = 0.05) {
+        this.startSession(freq);
+        document.getElementById("led-green")?.classList.add("on");
+
+        if (this.audioContext && this.audioContext.state !== 'closed') {
+            if (this.isBeeping) return;
+            this.isBeeping = true;
+
+            const safeFreq = (typeof freq === 'number' && isFinite(freq)) ? freq : 440;
+
+            this.gainNode.gain.cancelAndHoldAtTime(this.audioContext.currentTime);
+            this.oscillator.frequency.setValueAtTime(safeFreq, this.audioContext.currentTime);
+            this.gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
+
+            setTimeout(() => {
+                this.gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
+                this.isBeeping = false;
+                document.getElementById("led-green")?.classList.remove("on");
+            }, durationMs);
+        } else {
+            console.error("Audio Context not available. State:", this.audioContext ? this.audioContext.state : 'null');
+            document.getElementById("led-green")?.classList.remove("on");
+        }
+    }
+
+    /**
+     * Downloads a blob to the user's device.
+     */
+    downloadBlob(blob, filename) {
+        console.log(`[DL DEBUG] Downloading: ${filename}, Blob size: ${blob.size}`);
+        try {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            console.log(`[DL DEBUG] Download successful: ${filename}`);
+            return true;
+        } catch (error) {
+            console.error("[DL DEBUG] Download error:", error);
+            return false;
+        }
     }
 }
 
-/**
- * Starts the audio-only recording (Button C logic).
- */
-window.startAudioOnlyRecording = function() {
-    if (globalMediaRecorder && globalMediaRecorder.state !== 'inactive') {
-        console.warn("Audio-only recording is already active.");
-        return;
-    }
-    
-    if (!globalAudioContext || globalAudioContext.state !== 'running') {
-        console.error("Audio Context not running. Cannot start audio-only recording.");
-        window.resumeAudioContext(); 
-        return;
-    }
+// Create global instance
+const audioManager = new AudioManager();
 
-    const dest = globalAudioContext.createMediaStreamDestination();
-    globalMediaRecorder = new MediaRecorder(dest.stream, { mimeType: 'audio/webm' });
-    globalAudioChunks = [];
-    
-    globalGainNode.connect(dest); 
-
-    globalMediaRecorder.ondataavailable = (event) => {
-        globalAudioChunks.push(event.data);
-    };
-
-    globalMediaRecorder.onstop = () => {
-        globalGainNode.disconnect(dest); 
-        
-        const recordedAudioBlob = new Blob(globalAudioChunks, { type: 'audio/webm' });
-        console.log(`[AUD DEBUG] Audio-only recording stopped. Chunks: ${globalAudioChunks.length}, Blob size: ${recordedAudioBlob.size}`);
-        
-        window.triggerDownload(recordedAudioBlob, 'recorded_session.webm');
-
-        globalMediaRecorder = null;
-        globalAudioChunks = [];
-        document.getElementById("led-green")?.classList.remove("on");
-    };
-
-    globalMediaRecorder.start();
+// Legacy global functions for backward compatibility
+window.triggerDownload = function(blob, filename) {
+    return audioManager.downloadBlob(blob, filename);
 };
+
+window.getAudioDestination = function() {
+    return audioManager.getDestination();
+};
+
+window.resumeAudioContext = function() {
+    audioManager.resumeContext();
+};
+
+window.globalAudioContext = null;
+Object.defineProperty(window, 'globalAudioContext', {
+    get() { return audioManager.audioContext; },
+    set(val) { /* read-only */ }
+});
+
+window.startAudioOnlyRecording = function() {
+    audioManager.startRecording();
+};
+
+function startAudioSession(initialFreq = 100) {
+    audioManager.startSession(initialFreq);
+}
 
 function beepTone(freq = 440, durationMs = 100, volume = 0.05) {
-    startAudioSession(freq); 
-    
-    document.getElementById("led-green")?.classList.add("on");
-
-    if (globalAudioContext && globalAudioContext.state !== 'closed') {
-        if (globalIsBeeping) return;
-        globalIsBeeping = true;
-        
-        const safeFreq = (typeof freq === 'number' && isFinite(freq)) ? freq : 440;
-        
-        globalGainNode.gain.cancelAndHoldAtTime(globalAudioContext.currentTime);
-        globalOscillator.frequency.setValueAtTime(safeFreq, globalAudioContext.currentTime);
-        globalGainNode.gain.setValueAtTime(volume, globalAudioContext.currentTime);
-
-        setTimeout(() => {
-            globalGainNode.gain.setValueAtTime(0, globalAudioContext.currentTime);
-            globalIsBeeping = false;
-            document.getElementById("led-green")?.classList.remove("on");
-        }, durationMs);
-
-    } else {
-        console.error("Audio Context is not available for beep. State:", globalAudioContext ? globalAudioContext.state : 'null');
-        document.getElementById("led-green")?.classList.remove("on");
-    }
+    audioManager.beep(freq, durationMs, volume);
 }
+
+function stopAudioSession() {
+    audioManager.stopRecording();
+}
+
+window.stopAudioSession = stopAudioSession;
 
 /**
- * Stops the audio-only media recorder (Button C logic).
+ * Initialize audio on first user gesture.
  */
-function stopAudioSession() {
-    if (globalMediaRecorder && globalMediaRecorder.state === 'recording') {
-        globalMediaRecorder.stop();
-    } else {
-        console.warn("No active audio-only recording session to stop.");
-    }
-}
-window.stopAudioSession = stopAudioSession; // Export for script.js
-
-// Don't start audio automatically on DOMContentLoaded — modern browsers
-// require a user gesture to start or resume AudioContext. Instead,
-// initialize/resume the audio context on the first user interaction.
 function initAudioOnFirstGesture() {
     function onFirstGesture() {
         try {
-            startAudioSession();
-            // Attempt to resume if suspended
-            if (window.globalAudioContext && window.globalAudioContext.state === 'suspended') {
-                window.globalAudioContext.resume().catch(() => {});
+            audioManager.startSession();
+            if (audioManager.audioContext && audioManager.audioContext.state === 'suspended') {
+                audioManager.audioContext.resume().catch(() => {});
             }
         } catch (e) {
             console.error('Failed to start audio on first gesture:', e);
         }
     }
 
-    // Use click and keydown as common user gestures. Use { once: true }
-    // so we only call startAudioSession once.
     document.addEventListener('click', onFirstGesture, { once: true, passive: true });
     document.addEventListener('keydown', onFirstGesture, { once: true, passive: true });
 }
