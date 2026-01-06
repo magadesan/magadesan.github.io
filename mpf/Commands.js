@@ -4,6 +4,13 @@ async function waitFor10ms(start) {
     }
 }
 
+// Helper function to get zpu instance safely
+function getZpu() {
+    if (typeof zpu !== 'undefined') return zpu;
+    if (typeof window !== 'undefined' && window.zpu) return window.zpu;
+    return null;
+}
+
 function executeCommand(command) {
     const [cmd, ...args] = command.split(' ');
 
@@ -16,6 +23,11 @@ function executeCommand(command) {
             logger.write('\n\rExiting...');
         },
         'go': async () => {
+            const zpu = getZpu();
+            if (!zpu) {
+                logger.write('\n\rERROR: ZPU not initialized.\n\r> ');
+                return;
+            }
             let num = args.length && !isNaN(Number(args[0])) ? Number(args[0]) : 10;
             logger.write('\n\r');
             let cycle_counter = 0;
@@ -32,6 +44,11 @@ function executeCommand(command) {
             logger.write('\n\r> ');
         },
         'run': async () => {
+            const zpu = getZpu();
+            if (!zpu) {
+                logger.write('\n\rERROR: ZPU not initialized.\n\r> ');
+                return;
+            }
             logger.write('\n\r> ');
             let cycle_counter = 0;
             let start = Date.now();
@@ -47,6 +64,11 @@ function executeCommand(command) {
             logger.write('\n\r> ');
         },
         'pc': () => {
+            const zpu = getZpu();
+            if (!zpu) {
+                logger.write('\n\rERROR: ZPU not initialized.\n\r> ');
+                return;
+            }
             let num = (args.length && !isNaN(parseInt(args[0], 16))) ? parseInt(args[0], 16) : zpu.getState().pc;
             let state = zpu.getState();
             state.pc = num;
@@ -70,6 +92,11 @@ function executeCommand(command) {
         },
         'set': () => logger.write('\nEcho: ' + currentCommand.slice(5).trim()),
         'dump': () => {
+            const zpu = getZpu();
+            if (!zpu) {
+                logger.write('\n\rERROR: ZPU not initialized.\n\r> ');
+                return;
+            }
             logger.write('\n\r');
             let start = args.length && !isNaN(parseInt(args[0], 16)) ? parseInt(args[0], 16) : zpu.getState().pc;
             let end = args.length && !isNaN(parseInt(args[1], 16)) ? parseInt(args[1], 16) : start + 128;
@@ -78,11 +105,21 @@ function executeCommand(command) {
             logger.write('\n\r> ');
         },
         'step': () => {
+            const zpu = getZpu();
+            if (!zpu) {
+                logger.write('\n\rERROR: ZPU not initialized.\n\r> ');
+                return;
+            }
             zpu.run_instruction();
             displayRegisters();
             logger.write('\n\r> ');
         },
         's': () => {
+            const zpu = getZpu();
+            if (!zpu) {
+                logger.write('\n\rERROR: ZPU not initialized.\n\r> ');
+                return;
+            }
             zpu.run_instruction();
             logger.write('\n\r> ');
         },

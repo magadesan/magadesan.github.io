@@ -1,4 +1,5 @@
-let zpu;
+// Declare zpu in global scope so it's accessible to other scripts
+var zpu;
 
 function initZpu() {
     zpu = Z80({ mem_read, mem_write, io_read, io_write });
@@ -42,11 +43,14 @@ let cb_counter = 0;
 let ca_last_write = 0;       // last value written to CA
 let busy_timer = 0;          // counts down “busy” cycles
 
+// I/O Port constants
+const IO_PORT_CB = 0xCB;
+
 // Minimal CB read logic
 function io_read(address) {
     const port = address & 0xFF;
 
-    if (port === 0xCB) {
+    if (port === IO_PORT_CB) {
        return io_read_cb(port);
     }
     if (!keypressed) return 0xff;

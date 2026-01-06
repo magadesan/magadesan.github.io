@@ -29,11 +29,23 @@ window.onload = function () {
     else {
         console.error('Image element not found!');
     }
-    image.addEventListener('click', function (event) {
+    image.addEventListener('mousemove', function () {
+        // Hide the circle while moving
+        const circle = document.getElementById('circle');
+        if (circle) circle.style.display = 'none';
+    });
+    image.addEventListener('mousedown', function (event) {
         keypressed = true;
-        col = Math.floor(event.offsetX / cellWidth);
-        row = Math.floor(event.offsetY / cellHeight);
-        moveCircle((col + 0.5) * cellWidth, (row + .5) * cellHeight, 1);
+        const rect = image.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        col = Math.floor(x / cellWidth);
+        row = Math.floor(y / cellHeight);
+        // Pass raw mouse coordinates to moveCircle; it will center the circle
+        moveCircle(x, y, 1);
+    });
+    image.addEventListener('mouseup', function () {
+        // Hide the circle after mouse release
         moveCircle(0, 0, 0);
     });
 }
